@@ -10,50 +10,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
-# ========== HOW TO USE THIS TOOL ==========
-st.markdown("""
-### 📘 How to Use This Tool (TPO Email Sender)
-
-This tool helps the TPO Cell send bulk emails with proper personalization, attachments, and official footer.
-
-#### ✅ Step-by-Step Setup
-1. **Enable 2-Step Verification on Gmail**
-   - Visit: [Google 2-Step Verification](https://myaccount.google.com/security)
-   - Turn on 2-step verification (required).
-
-2. **Generate App Password (for Gmail Login)**
-   - Visit: [App Passwords](https://myaccount.google.com/apppasswords)
-   - Select: **Mail** → **Other (Custom Name)** → Generate
-   - Copy the 16-digit password and paste it here.
-
-3. **Create a Google Service Account & JSON File**
-   - Go to: [Google Cloud Console](https://console.cloud.google.com/)
-   - Create project → Enable Sheets API → Create Credentials → Service Account → Create Key (.json)
-   - Share your **Google Sheet** with the service account email (`xxxx@project.iam.gserviceaccount.com`)
-
-4. **Prepare Google Sheet**
-   - Must have at least **email** column (others like name, gender are optional)
-   - Example format:
-     | name | gender | email              |
-     |------|--------|--------------------|
-     | Ravi | male   | ravi@example.com   |
-
-5. **Run the App**
-   - Fill Gmail credentials
-   - Load Google Sheet
-   - Compose message with placeholders like `{name}`, `{title}`, `{footer}`
-   - Use **Test Mode** to test (sends only to admin email)
-   - Press **Send Emails**
-
----
-🎯 **Placeholders:** `{name}`, `{gender}`, `{title}` (Mr./Ms. auto-generated), `{footer}` (official JECRC style)
-
-📎 **Attachments:** One common file can be attached to all emails.
-
-📝 **HTML Mode:** Enable for colored, styled emails with logo & LinkedIn button.
-""")
-
-# ========== Session State Setup ==========
+# ========== INIT ==========
 def init_session():
     defaults = {
         'sender_email': "",
@@ -71,10 +28,49 @@ def init_session():
 
 init_session()
 
+# ========== PAGE SETUP ==========
 st.set_page_config(page_title="TPO Email Sender - JECRC", layout="wide")
 st.title("📧 TPO Email Automation Tool – JECRC University")
 
-# ========== Sidebar ==========
+# ========== HOW TO USE GUIDE ==========
+with st.expander("📘 How to Use This Tool (Click to Expand Guide)", expanded=False):
+    st.markdown("""
+This tool helps the TPO Cell send bulk emails with proper personalization, attachments, and official footer.
+
+#### ✅ Step-by-Step Setup
+
+1. **Enable 2-Step Verification on Gmail**  
+   🔗 [Google 2-Step Verification](https://myaccount.google.com/security)
+
+2. **Generate App Password (for Gmail)**  
+   🔗 [App Passwords](https://myaccount.google.com/apppasswords)
+
+3. **Create Google Service Account (.json file)**  
+   🔗 [Google Cloud Console](https://console.cloud.google.com/)  
+   - Enable Sheets API  
+   - Create service account → Add Key → JSON  
+   - Share your Google Sheet with:  
+     `service-account-name@project-id.iam.gserviceaccount.com`
+
+4. **Prepare Google Sheet Columns**  
+   - Required: `email`  
+   - Optional: `name`, `gender`  
+   - Use `{name}`, `{title}`, `{footer}` in your message
+
+5. **Run the App**
+   - Upload your Gmail/app password  
+   - Load the sheet + json file  
+   - Use test mode to verify  
+   - Click **Send Emails**
+
+---
+
+🎯 Placeholders: `{name}`, `{gender}`, `{title}`, `{footer}`  
+📎 Attachment: One common file  
+📝 HTML Mode: Enables styling, logo, LinkedIn button
+""")
+
+# ========== SIDEBAR ==========
 with st.sidebar:
     st.header("🔐 Sender Authentication")
     st.session_state.sender_email = st.text_input("Gmail Address", value=st.session_state.sender_email)
@@ -89,7 +85,7 @@ with st.sidebar:
 
     log_download = st.checkbox("Enable Email Log Download")
 
-# ========== Compose Email ==========
+# ========== COMPOSE ==========
 st.subheader("📝 Compose Email")
 col1, col2 = st.columns(2)
 with col1:
@@ -99,7 +95,7 @@ with col2:
 
 st.session_state.body = st.text_area("Email Body (Use {name}, {title}, {footer})", height=250, value=st.session_state.body)
 
-# ========== JECRC Footer ==========
+# ========== FOOTER ==========
 st.subheader("✍️ Signature Block")
 left, right = st.columns(2)
 with left:
@@ -137,7 +133,7 @@ selected_footer = official_footer_html
 st.markdown("**Live Footer Preview:**")
 st.markdown(selected_footer, unsafe_allow_html=True)
 
-# ========== Load Recipients ==========
+# ========== LOAD SHEET ==========
 st.subheader("📂 Load Recipient List from Google Sheet")
 sheet_url = st.text_input("Google Sheet URL")
 json_file = st.file_uploader("Upload Service Account JSON", type="json")
@@ -173,13 +169,11 @@ if sheet_url and json_file:
     except Exception as e:
         st.error(f"Sheet Load Error: {e}")
 
-# ========== Preview Email ==========
+# ========== PREVIEW ==========
 if data_loaded and st.button("👀 Preview Email"):
     sample = df.iloc[0]
-    name = sample.get('name', '')
-    gender = sample.get('gender', '').lower()
+    gender = str(sample.get('gender', '')).lower()
     title = "Mr." if gender == "male" else "Ms." if gender == "female" else ""
-
     preview_body = st.session_state.body.replace("{title}", title).replace("{footer}", selected_footer)
     for key, value in sample.items():
         if pd.notna(value):
@@ -191,7 +185,7 @@ if data_loaded and st.button("👀 Preview Email"):
     else:
         st.text(preview_body)
 
-# ========== Send Emails ==========
+# ========== SEND ==========
 if data_loaded and st.button("📨 Send Emails"):
     if not st.session_state.sender_email or not st.session_state.sender_password or not st.session_state.subject or not st.session_state.body:
         st.error("Missing required fields.")
@@ -206,8 +200,7 @@ if data_loaded and st.button("📨 Send Emails"):
 
                 for i, row in target_df.iterrows():
                     recipient = admin_email if test_mode else row['email']
-                    name = row.get('name', '')
-                    gender = row.get('gender', '').lower()
+                    gender = str(row.get('gender', '')).lower()
                     title = "Mr." if gender == "male" else "Ms." if gender == "female" else ""
 
                     final_body = st.session_state.body.replace("{title}", title).replace("{footer}", selected_footer)
